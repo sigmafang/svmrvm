@@ -37,18 +37,18 @@ sr = p./repmat(stdr,m,1);
 [coefs,scores,variances,t2] = princomp(sr);
 percent_explained = 100*variances/sum(variances);
 
-figure
-scatter3(scores(:,1),scores(:,2),scores(:,3), 30 ,Y, 'filled');
-xlabel('# times pregnant(PC1)');
-ylabel('Plama Glucose conc(PC2)');
-zlabel('Diastolic Blood Pressure(PC3)')
-title('3D principle components');
-hold on;
-figure
-bar(percent_explained)
-xlabel('Principal Component')
-ylabel('Variance Explained (%)')
-title('Principle Components');
+% figure
+% scatter3(scores(:,1),scores(:,2),scores(:,3), 30 ,Y, 'filled');
+% xlabel('# times pregnant(PC1)');
+% ylabel('Plama Glucose conc(PC2)');
+% zlabel('Diastolic Blood Pressure(PC3)')
+% title('3D principle components');
+% hold on;
+% figure
+% bar(percent_explained)
+% xlabel('Principal Component')
+% ylabel('Variance Explained (%)')
+% title('Principle Components');
 
 % Try to use SVM and see error in 10 fold cross validation
 % clear;
@@ -60,9 +60,9 @@ mex qp.c pr_loqo.c
 !copy "C:\Program Files\MATLAB\R2007a\toolbox\svm\Optimiser\qp.mexw32" "C:\Program Files\MATLAB\R2007a\toolbox\svm"
 
 indices = crossvalind('Kfold',Y,10);
-C = 1000;
+C = 5000;
 global p1;
-p1 = 0.2;
+p1 = 0.1;
 global p2
 p2 = 0;
 global sep;
@@ -71,9 +71,9 @@ sep = 1;
 cp = classperf(Y);
 for i = 1:1
     test = (indices == i); train = ~test;
-    trnX = X(train,:);
+    trnX = scores(train,:);
     trnY = Y(train,:);
-    tstX = X(test,:);
+    tstX = scores(test,:);
     tstY = Y(test,:);
     
     [nsv alpha bias] = svc(trnX,trnY,'rbf',C);
@@ -81,8 +81,8 @@ for i = 1:1
     round = i
     err = svcerror(trnX,trnY,tstX,tstY,'rbf',alpha,bias)
     
-    figure
-    svcplot(trnX(:,1:2),trnY,'rbf',alpha,bias,0);
+%     figure
+%     svcplot(trnX(:,1:2),trnY,'rbf',alpha,bias,0);
     
     figure
     svcplot(scores(:,1:2),trnY,'rbf',alpha,bias,0);
