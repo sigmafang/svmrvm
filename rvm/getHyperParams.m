@@ -21,18 +21,11 @@ function [weights, alpha, gamma, reqdIndices] = getHyperParams(alpha, t, PHI)
       weights(~reqdIndices)	= 0;
       PHI_used          = PHI(:,reqdIndices);
 
-      [weights(reqdIndices) Ui likelihood] = ...
+      [weights(reqdIndices) covar] = ...
         updateWeightsAndCovariance(PHI_used,t,weights(reqdIndices),alpha_used);
 
-      % Need determinant and diagonal values of 
-      % posterior weight covariance matrix (SIGMA in paper)
-      logdetH	= -2*sum(log(diag(Ui)));
-      diagSig	= sum(Ui.^2,2);
-      gamma		= 1 - alpha_used.*diagSig;
-
-      % Compute marginal likelihood (approximation for classification case)
-      marginal	= likelihood - 0.5*(logdetH - sum(log(alpha_used)) + ...
-                       (weights(reqdIndices).^2)'*alpha_used);
+      diagCovar	= sum(covar.^2,2);
+      gamma		= 1 - alpha_used.*diagCovar;
 
       % print out how many non zero params are retained
       fprintf('iter = %d number of non zero params = %d\n',...
@@ -43,7 +36,7 @@ function [weights, alpha, gamma, reqdIndices] = getHyperParams(alpha, t, PHI)
         % update alpha using Eqn 7.116
         alpha(reqdIndices)	= gamma ./ weights(reqdIndices).^2;
        
-        % Find difference in the lod alpha values.
+        % Find difference in the log alpha values.
         % If difference is less than min diference set, break from loop
         reqdAlpha       = alpha(reqdIndices);
         logAlphaDiff    = abs(logAlpha(reqdAlpha~=0) - log(reqdAlpha(reqdAlpha~=0)));
