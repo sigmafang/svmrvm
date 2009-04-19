@@ -1,89 +1,70 @@
-function [weights, alpha, gamma, used] = getHyperParams(alpha, t, PHI)
+function [weights, alpha, gamma, reqdIndices] = getHyperParams(alpha, t, PHI)
 
-    MIN_DELTA_LOGALPHA	= 1e-3;
-    ALPHA_MAX           = 1e9;
+    minLnAlphaChange	= 1e-3;
+    maxAlpha            = 1e9;
     maxIts              = 1000;
 
     % Set up parameters and hyperparameters
-    [N,M]	= size(PHI);
-    w       = zeros(M,1); 
-    alpha	= alpha*ones(M,1);
-    gamma	= ones(M,1);
-    LAST_IT	= 0;
-    %
-    % The main loop
-    % 
-    for i=1:maxIts
- 
-      % Prune based on large values of alpha
-      useful        = (alpha<ALPHA_MAX);
-      alpha_used	= alpha(useful);
-      M             = sum(useful);
-      % Prune weights and basis
-      w(~useful)	= 0;
-      PHI_used      = PHI(:,useful);
+    [N,M]       = size(PHI); 
+    weights           = zeros(M,1); 
+    alpha       = alpha*ones(M,1);
+    gamma       = ones(M,1);
+    isLastIter	= 0;
 
+    for i   =  1:maxIts
+      % Remove large alpha values, set corresponsing weights to zero and
+      % take only corresponding basis functions as well
+      % Refer to Michael tipping's algorithm for pruning criteria
+      reqdIndices       = (alpha < maxAlpha);
+      alpha_used        = alpha(reqdIndices);
+      M                 = sum(reqdIndices);
+      weights(~reqdIndices)	= 0;
+      PHI_used          = PHI(:,reqdIndices);
 
-    [w(useful) Ui dataLikely] = ...
-        updateWeightsAndCovariance(PHI_used,t,w(useful),alpha_used);
+      [weights(reqdIndices) Ui likelihood] = ...
+        updateWeightsAndCovariance(PHI_used,t,weights(reqdIndices),alpha_used);
 
       % Need determinant and diagonal values of 
       % posterior weight covariance matrix (SIGMA in paper)
       logdetH	= -2*sum(log(diag(Ui)));
       diagSig	= sum(Ui.^2,2);
-      %
-      % Well-determinedness parameters (gamma)
-      % 
       gamma		= 1 - alpha_used.*diagSig;
 
-      %
       % Compute marginal likelihood (approximation for classification case)
-      %
-      marginal	= dataLikely - 0.5*(logdetH - sum(log(alpha_used)) + ...
-                       (w(useful).^2)'*alpha_used);
+      marginal	= likelihood - 0.5*(logdetH - sum(log(alpha_used)) + ...
+                       (weights(reqdIndices).^2)'*alpha_used);
 
-    % output diagnostic info
-%     if (LAST_IT)
-      fprintf('iter = %d L = %0.3f Gamma = %0.2f (nz = %d)\n',...
-         i, marginal, sum(gamma), sum(useful));
-%     end;
+      % print out how many non zero params are retained
+      fprintf('iter = %d number of non zero params = %d\n',...
+         i, sum(reqdIndices));
 
-      if ~LAST_IT
-        % 
-        % alpha and beta re-estimation on all but last iteration
-        % (only update the posterior statistics the last time around)
-        % 
-        logAlpha		= log(alpha(useful));
-        %
-        % Alpha re-estimation
-        % 
-        % This will be much improved in the subsequent SB2 library
-        % 
-        % MacKay-style update for alpha given in original NIPS paper
-        % 
-        alpha(useful)	= gamma ./ w(useful).^2;
-        %
-        % Terminate if the largest alpha change is smaller than threshold
-        % 
-        au		= alpha(useful);
-        maxDAlpha	= max(abs(logAlpha(au~=0)-log(au(au~=0))));
-        if maxDAlpha<MIN_DELTA_LOGALPHA
-          LAST_IT	= 1;
-          fprintf('Terminating as change in log alpha stagnates...\n');
+      if ~isLastIter
+        logAlpha		= log(alpha(reqdIndices));
+        % update alpha using Eqn 7.116
+        alpha(reqdIndices)	= gamma ./ weights(reqdIndices).^2;
+       
+        % Find difference in the lod alpha values.
+        % If difference is less than min diference set, break from loop
+        reqdAlpha       = alpha(reqdIndices);
+        logAlphaDiff    = abs(logAlpha(reqdAlpha~=0) - log(reqdAlpha(reqdAlpha~=0)));
+        maxDAlpha       = max(logAlphaDiff);
+        if maxDAlpha < minLnAlphaChange
+              isLastIter	= 1; %The change in alpha vreqdAlphaes is smaller than that is required
+              fprintf('Terminating as change in log alpha stagnates...\n');
         end
       else
-        % Its the last iteration due to termination, leave outer loop
-        break;	% that's all folks!
+        % Break if isLastIter = true
+        break;	
       end
     end
-    %
-    % Tidy up return values
-    % 
-    weights	= w(useful);
-    used	= find(useful);
 
-    if ~LAST_IT
+    % Copy to return values
+    weights = weights(reqdIndices);
+    reqdIndices	= find(reqdIndices);
+
+    if ~isLastIter
       fprintf('Terminating as max number of iterations reached..\n');
     end
+    
     fprintf('Number of non zero parameters is %d\n', length(weights));
 end
